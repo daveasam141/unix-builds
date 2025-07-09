@@ -1,0 +1,27 @@
+#cloud-config
+users:
+  - name: ubuntu
+    shell: /bin/bash
+    groups: [sudo]
+    lock_passwd: false
+    passwd: "$6$TMRaOShE4lqQaTFa$3zagpAHkVcUQR4bn61Mrfddy5WrxaPxXaqELbuIBeUKYvAxUMfKLw7IiCeCOZbDQd2lJDECD0mCG8LNeGUjd9."
+    sudo: ["ALL=(ALL) NOPASSWD:ALL"]
+ssh_pwauth: true
+disable_root: true
+
+
+write_files:
+  - path: /etc/netplan/50-cloud-init.yaml
+    content: |
+      network:
+        version: 2
+        ethernets:
+          ens160:
+            dhcp4: false
+            dhcp6: false
+            addresses: [192.168.1.126/24]
+            gateway4: 192.168.1.1
+            nameservers:
+              addresses: [8.8.8.8,8.8.4.4]
+
+

@@ -12,5 +12,4 @@ variable "vsphere_password" {
 variable "vsphere_server" {
   description = "vSphere server address"
   type        = string
-  default     = "x.x.x.x.x"
 }
