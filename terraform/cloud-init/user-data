@@ -1,14 +1,18 @@
 #cloud-config
+hostname: waveform-01
+manage_etc_hosts: true
+
 users:
+  - default
   - name: ubuntu
+    gecos: Ubuntu User
     shell: /bin/bash
+    primary_group: users
     groups: [sudo]
     lock_passwd: false
-    passwd: "$6$TMRaOShE4lqQaTFa$3zagpAHkVcUQR4bn61Mrfddy5WrxaPxXaqELbuIBeUKYvAxUMfKLw7IiCeCOZbDQd2lJDECD0mCG8LNeGUjd9."
-    sudo: ["ALL=(ALL) NOPASSWD:ALL"]
-ssh_pwauth: true
-disable_root: true
-
+    passwd: $6$fpe6/paN5xXR4iRq$v9aG2MT2hIP1.IOupSAPa.zo0KQiy.7G/.eywavkQC0gZr1AZGMDlzJVDcbOe7m0ESA566lPigizm6MuDcGj/1
+    ssh_authorized_keys:
+      - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDIeh8Bos/R9uLRGiQAUi+ZU62Cx9W2TBpikWOaeIg4ytL41mPIGU0BvWhgJ3JCEEYDrl/zot54ao8u2jCnFnkoq82wMWZ0zfMkJvTK8h45feAaxdfBqKtMWG4R005RuwY8VO8QKXHkWGMcvpaRJWEjmx2ft4i/aARGPMHizXPaHWFng+tHghqFVI3K9Er0TUPX8epROjleRMsV7KmRqgxa2BWUT5B7QdDSsaKIqZl+Ror6o2NkwrxI9jv1srYYINYRKqczUp5LZ9Ie3uX3sfNbwYcs9TZBQ1mzynjd2BbnMZhQwIumvGJTwViAYAyab0XfPZ78C5t/fTVS3A0ZlwjY6s3m/MQRYVocaGdU5osXXG/AqNO9EFwHQ4ujsa7Y35d6XFS9TXaDwufa37iduwymn/PBQSNk2t0yfoKML+HTXZBA/BGlpBAAYkEakPPYUQTAukxeN0ZV7enfm1TKC8ERKgXB5r0TDDmELHedUnY3Cvl/WL9VMlo8ErRb+gTcnmE= 2wavey@Davids-MacBook-Pro.local
 
 write_files:
   - path: /etc/netplan/50-cloud-init.yaml
@@ -16,12 +20,14 @@ write_files:
       network:
         version: 2
         ethernets:
-          ens160:
+          ens33:
             dhcp4: false
-            dhcp6: false
-            addresses: [192.168.1.126/24]
-            gateway4: 192.168.1.1
+            addresses: [172.30.1.19/24]
+            gateway4: 172.30.1.1
             nameservers:
-              addresses: [8.8.8.8,8.8.4.4]
+              addresses: [8.8.8.8, 8.8.4.4]
+    permissions: '0644'
 
-
+runcmd:
+  - netplan apply
+  - systemctl restart systemd-networkd

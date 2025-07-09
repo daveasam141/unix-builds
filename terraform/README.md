@@ -92,3 +92,7 @@ $env:TF_VAR_vsphere_password = "MySecurePassword123!"
 export TF_VAR_vsphere_user="administrator@vsphere.local"
 export TF_VAR_vsphere_password="MySecurePassword123!"
 export TF_VAR_vsphere_server="x.x.x.x"
+
+## for debugging
+export TF_LOG=TRACE
+export TF_LOG_PATH=terraform-debug.log
