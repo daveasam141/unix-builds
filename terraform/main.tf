@@ -1,14 +1,14 @@
 data "vsphere_datacenter" "datacenter" {
-  name = "infra-datacenter"
+  name = "HAVEN"
 }
 
 data "vsphere_datastore" "datastore" {
-  name          = "kendops-kube-nas-datastore-01"
+  name          = "datastore1"
   datacenter_id = data.vsphere_datacenter.datacenter.id
 }
 
 data "vsphere_compute_cluster" "cluster" {
-  name          = "infra-cluster"
+  name          = "haven-cluster-1"
   datacenter_id = data.vsphere_datacenter.datacenter.id
 }
 
@@ -18,8 +18,13 @@ data "vsphere_network" "network" {
 }
 
 data "vsphere_virtual_machine" "template" {
-  name          = "test-u-template"
+  name          = "ubuntu-full-iso"
   datacenter_id = data.vsphere_datacenter.datacenter.id
+}
+
+# Add your existing folder
+data "vsphere_folder" "vm_folder" {
+  path = "haven-test-01"
 }
 
 resource "vsphere_virtual_machine" "vm" {
@@ -32,6 +37,9 @@ resource "vsphere_virtual_machine" "vm" {
   firmware         = "efi"
   enable_disk_uuid = true
 
+  # Place VM in the specified folder
+  folder = data.vsphere_folder.vm_folder.path
+
   # Wait for guest net to be ready
   wait_for_guest_net_timeout = 5
   wait_for_guest_ip_timeout  = 5
@@ -43,7 +51,7 @@ resource "vsphere_virtual_machine" "vm" {
 
   disk {
     label            = "disk0"
-    size             = 20
+    size             = 50
     thin_provisioned = true
   }
 

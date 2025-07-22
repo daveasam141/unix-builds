@@ -1,0 +1,249 @@
+---
+- name: Configure newly deployed VMs
+  hosts: new_vms
+  become: yes
+  vars:
+    # Configuration variables
+    fortra_deb_file: "frontline-agent_LATEST-2.18.341_amd64.deb"
+    fortra_activation_key: "pn945d40-53c2-4eaf-bf8e-5ccaeb2c47fc"
+    cortex_tar_file: "PA_LNX_8-6-0_241125_sh.tar.gz"
+    cortex_script: "cortex-8.6.0.127790.sh"
+    ad_domain: "corp.emfbroadcasting.com"
+    ad_join_user: "gmathersDA"
+    
+    # Location-based broker (set per host in inventory)
+    # cortex_broker: "PRKLXDRBRKR1" # Will be set in inventory
+    
+  tasks:
+    # Basic system updates
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+    
+    - name: Upgrade all packages
+      apt:
+        upgrade: dist
+        autoremove: yes
+        autoclean: yes
+    
+    - name: Install basic network tools
+      apt:
+        name:
+          - net-tools
+          - traceroute
+          - nmap
+        state: present
+    
+    # Disable IPv6
+    - name: Backup original GRUB configuration
+      copy:
+        src: /etc/default/grub
+        dest: /etc/default/grub.backup
+        remote_src: yes
+        backup: yes
+    
+    - name: Disable IPv6 in GRUB
+      lineinfile:
+        path: /etc/default/grub
+        regexp: '^GRUB_CMDLINE_LINUX_DEFAULT='
+        line: 'GRUB_CMDLINE_LINUX_DEFAULT="ipv6.disable=1"'
+        backup: yes
+      register: grub_modified
+    
+    - name: Update GRUB
+      command: update-grub
+      when: grub_modified.changed
+    
+    # Install Fortra
+    - name: Create software directory
+      file:
+        path: /tmp/software
+        state: directory
+        mode: '0755'
+    
+    - name: Copy Fortra DEB package
+      copy:
+        src: "files/{{ fortra_deb_file }}"
+        dest: "/tmp/software/{{ fortra_deb_file }}"
+        mode: '0644'
+    
+    - name: Install Fortra package
+      apt:
+        deb: "/tmp/software/{{ fortra_deb_file }}"
+        state: present
+    
+    - name: Activate Fortra
+      command: "/var/frontline/bin/frontlineUtils activate --activatekey {{ fortra_activation_key }}"
+      register: fortra_activation
+      changed_when: fortra_activation.rc == 0
+    
+    - name: Wait for Fortra activation
+      pause:
+        seconds: 15
+    
+    - name: Verify Fortra installation
+      command: /var/frontline/bin/frontlineUtils verify
+      register: fortra_verify
+      failed_when: fortra_verify.rc != 0
+    
+    # Install Cortex XDR
+    - name: Copy Cortex XDR package
+      copy:
+        src: "files/{{ cortex_tar_file }}"
+        dest: "/tmp/software/{{ cortex_tar_file }}"
+        mode: '0644'
+    
+    - name: Extract Cortex XDR package
+      unarchive:
+        src: "/tmp/software/{{ cortex_tar_file }}"
+        dest: /tmp/software/
+        remote_src: yes
+    
+    - name: Make Cortex installer executable
+      file:
+        path: "/tmp/software/{{ cortex_script }}"
+        mode: '0755'
+    
+    - name: Create Cortex configuration directory
+      file:
+        path: /etc/panw
+        state: directory
+        mode: '0755'
+    
+    - name: Copy Cortex configuration
+      copy:
+        src: files/cortex.conf
+        dest: /etc/panw/cortex.conf
+        mode: '0644'
+    
+    - name: Install Cortex XDR
+      command: "/tmp/software/{{ cortex_script }}"
+      register: cortex_install
+      changed_when: cortex_install.rc == 0
+    
+    - name: List Cortex endpoint tags
+      command: /opt/traps/bin/cytool endpoint_tags list
+      register: cortex_tags
+    
+    - name: Add Cortex endpoint tags
+      command: "/opt/traps/bin/cytool endpoint_tags add SEG,{{ cortex_broker }}"
+      when: cortex_broker is defined
+      register: cortex_tags_add
+      changed_when: cortex_tags_add.rc == 0
+    
+    - name: Query Cortex proxy
+      command: /opt/traps/bin/cytool proxy query
+      register: cortex_proxy_query
+      changed_when: false
+    
+    - name: Set Cortex proxy
+      command: "/opt/traps/bin/cytool proxy set {{ cortex_broker }}.corp.emfbroadcasting.com:8888"
+      when: cortex_broker is defined
+      register: cortex_proxy_set
+      changed_when: cortex_proxy_set.rc == 0
+    
+    # AD Integration
+    - name: Install AD integration packages
+      apt:
+        name:
+          - sssd-ad
+          - sssd-tools
+          - realmd
+          - adcli
+        state: present
+    
+    - name: Discover AD domain
+      command: "realm -v discover {{ ad_domain }}"
+      register: domain_discovery
+      changed_when: false
+    
+    - name: Join AD domain (interactive - requires manual input)
+      shell: "realm -v join {{ ad_domain }} -U {{ ad_join_user }}"
+      register: domain_join
+      ignore_errors: yes
+      when: ansible_check_mode == false
+    
+    - name: Display domain join instruction
+      debug:
+        msg: |
+          Manual step required: Run the following command on the target system:
+          sudo realm -v join {{ ad_domain }} -U {{ ad_join_user }}
+          Enter the password when prompted.
+      when: domain_join is failed or ansible_check_mode == true
+    
+    - name: Configure SSSD
+      copy:
+        content: |
+          [sssd]
+          domains = {{ ad_domain }}
+          config_file_version = 2
+          services = nss, pam
+
+          [domain/{{ ad_domain }}]
+          default_shell = /bin/bash
+          krb5_store_password_if_offline = True
+          cache_credentials = True
+          krb5_realm = {{ ad_domain | upper }}
+          realmd_tags = manages-system joined-with-adcli
+          id_provider = ad
+          fallback_homedir = /home/%u
+          ad_domain = {{ ad_domain }}
+          use_fully_qualified_names = False
+          ldap_id_mapping = True
+          access_provider = ad
+        dest: /etc/sssd/sssd.conf
+        mode: '0600'
+        backup: yes
+      notify: restart sssd
+    
+    - name: Enable automatic home directory creation
+      command: pam-auth-update --enable mkhomedir
+      register: pam_update
+      changed_when: "'mkhomedir' not in pam_update.stdout"
+    
+    - name: Configure sudoers for AD groups
+      lineinfile:
+        path: /etc/sudoers
+        line: "%segunixadmin ALL=(ALL:ALL) ALL"
+        validate: 'visudo -cf %s'
+        backup: yes
+    
+    - name: Deny all realm access by default
+      command: realm deny --all
+      register: realm_deny
+      changed_when: realm_deny.rc == 0
+      ignore_errors: yes
+    
+    - name: Permit segunixadmin group
+      command: realm permit -g segunixadmin
+      register: realm_permit
+      changed_when: realm_permit.rc == 0
+      ignore_errors: yes
+    
+    - name: List realm configuration
+      command: realm list
+      register: realm_list
+      changed_when: false
+    
+    - name: Display realm configuration
+      debug:
+        var: realm_list.stdout_lines
+    
+    # Cleanup
+    - name: Clean up temporary files
+      file:
+        path: /tmp/software
+        state: absent
+    
+    - name: Reboot system if GRUB was modified
+      reboot:
+        reboot_timeout: 300
+      when: grub_modified.changed
+
+  handlers:
+    - name: restart sssd
+      systemd:
+        name: sssd
+        state: restarted
+        enabled: yes
