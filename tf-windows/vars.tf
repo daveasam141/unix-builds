@@ -34,5 +34,4 @@ variable "domain_admin_password" {
 variable "domain_name" {
   description = "Domain to join"
   type        = string
-  default     = corp.emfbroadcasting.com
 }

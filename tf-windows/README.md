@@ -60,7 +60,7 @@ xml<?xml version="1.0" encoding="utf-8"?>
         <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
             <AutoLogon>
                 <Password>
-                    <Value>your-password-here</Value>
+                    <Value>test_123</Value>
                     <PlainText>true</PlainText>
                 </Password>
                 <Enabled>true</Enabled>
@@ -83,7 +83,7 @@ xml<?xml version="1.0" encoding="utf-8"?>
 
 Step 5: Sysprep and Shutdown
 powershell# Run sysprep to generalize the image
-C:\Windows\System32\Sysprep\sysprep.exe /generalize /oobe /shutdown /unattend:C:\path\to\unattend.xml
+C:\Windows\System32\Sysprep\sysprep.exe /generalize /oobe /shutdown /unattend:C:\Users\Administrator\unattend.xml
 Step 6: Convert to Template
 
 Wait for VM to shutdown completely
